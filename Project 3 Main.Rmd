@@ -1,7 +1,16 @@
 ---
 title: "DATA 607 Project 3"
 author: "Arutam Antunish, Catherine Dube, Wendy Romero"
-output: html_document
+output: 
+  html_document:
+    self_contained: true
+    toc: true
+    toc_float: true
+    code_folding: hide
+    number_sections: true
+    df_print: paged
+    # Save HTML in the same folder as the Rmd
+    output_file: "Project3_Report.html"
 ---
 
 ```{r setup, include=FALSE}
@@ -12,10 +21,20 @@ pacman::p_load(tidyverse,
                rvest, 
                xml2, 
                jsonlite, 
+               scales, # for graphs 
                rstudioapi, # Using to get the current file location
-               DiagrammeR # ER diagram
+               DiagrammeR, # ER diagram
+               DBI, # for sqllite db
+               RSQLite # for sqllite db
                )
 ```
+
+## Objective
+Answer the Question: **Which are the most valued data science skills?**
+
+## Approach
+Using the Kaggle dataset [Data Science Job Postings & Skills (2024)](https://www.kaggle.com/datasets/asaniczka/data-science-job-postings-and-skills/data). With it, we can trim down the job listing to only those that are the most representative of data science role. Then we can investigate what skills were the most commonly required for these jobs.
+
 
 ## Reading the Data from Github Repo 
 ```{r read-in-data} 
@@ -36,77 +55,113 @@ job_postings_with_skills <- merge(
   select(c("job_link", "job_title", "job_skills"))
 
 # Cleaning up the skills
-skills_long <- job_postings_with_skills %>%
+job_skills_long_normalized <- job_postings_with_skills %>%
   select(job_link, job_skills) %>%
   mutate(job_skills = str_split(job_skills, ",")) %>%     # Split skills by comma
   unnest(job_skills) %>%
   mutate(job_skills = str_trim(job_skills))
 
 # skills_long will be used for our database
+```
 
-# How many jobs mention each skill
-skill_counts <- skills_long %>%
+## Making the SQLLite Database
+```{r sql-stuff}
+# Create a new SQLite database 
+db_file <- "jobs_database.sqlite"
+con <- dbConnect(SQLite(), dbname = db_file)
+
+# Write each dataframe to the database as a table
+dbWriteTable(con, "job_skills_long", job_skills_long_normalized, overwrite = TRUE)
+dbWriteTable(con, "job_postings", job_postings_raw, overwrite = TRUE)
+dbWriteTable(con, "job_summary", job_summary_raw, overwrite = TRUE)
+
+```
+These are the tables in our SQLite database: `r paste(dbListTables(con), collapse = ", ")`.
+
+Retain SQLLite as the Data "Source of Truth" and pull the data from here going forward
+```{r getting-sql-data}
+job_postings <- dbReadTable(con, "job_postings")
+job_summary <- dbReadTable(con, "job_summary")
+job_skills_long <- dbReadTable(con, "job_skills_long")
+```
+
+Disconnest from SQLLite Database at end
+```{r close-connection}
+# Disconnect from the database when done
+dbDisconnect(con)
+```
+
+## Let's trim 
+Trimming this down to a shorter list of job titles that we think are more relevant to the question.
+```{r trimming}
+filtered_jobs <- job_postings %>%
+  filter(
+    str_detect(job_title, regex("data.*science", ignore_case = TRUE)) |
+    str_detect(job_title, regex("analyst", ignore_case = TRUE)) |
+    str_detect(job_title, regex("database", ignore_case = TRUE)) |
+    str_detect(job_title, regex("data.*engineer", ignore_case = TRUE))
+  )
+
+# What percent of the original dataset is left?
+trimmed_pct <- round(nrow(filtered_jobs) / nrow(job_postings)*100, 2)
+
+# Overwrite job_postings with the trimmed dataset
+job_postings <- filtered_jobs
+```
+We have trimmed down our initial dataset, and now we are only working with `r trimmed_pct`% of the original job listings. This was based on job listings that specifically referenced data science, analyst, database, or data engineering. This is more representative of the data science jobs that we are interested in.
+
+```{r skill-frequency}
+# Joining our trimmed job_postings with job_skills_long
+job_postings_with_skills <- job_skills_long %>%
+  inner_join(job_postings, by = "job_link")
+
+# Count how many jobs mention each skill
+skill_counts <- job_postings_with_skills %>%
   group_by(job_skills) %>%
   summarise(
-    jobs_with_skill = n_distinct(job_link)
+    jobs_with_skill = n_distinct(job_link),
+    .groups = "drop"
   ) %>%
-  ungroup() %>%
   mutate(
     percent_jobs = (jobs_with_skill / n_distinct(job_postings_with_skills$job_link)) * 100
   ) %>%
   arrange(desc(jobs_with_skill)) %>%
-  slice_head(n = 25)  # Capped it at top 25 skills to the graph will be readable
+  slice_head(n = 25)  # Top 25 skills for readability
+
+#head(skill_counts, 25)
 ```
  
+## Top 25 Skills for Data Science!
 ```{r viz}
 ggplot(skill_counts, aes(x = reorder(job_skills, percent_jobs), y = percent_jobs)) +
   geom_col(fill = "cornflowerblue") +
-  coord_flip() +  # Horizontal bars for better readbaility
+  coord_flip() +  # Horizontal bars for better readability
   labs(
-    title = "Top 25 Skills Mentioned in Job Listings",
+    title = "Top 25 Skills for Data Science Positions in 2024",
     x = "Skill",
-    y = "Percentage of Job Listings (%)"
+    y = "Percentage of Job Listings"
   ) +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +  # Add % sign to axis
   theme_minimal()
 ```
 
-Now honestly if doing this properly, should probably have parsed out which job titles we want to include or not, but I just really didn't look at that yet since the data set was supposed to be data science jobs.
+## Conclusion
+The top 5 most valuable data science skills are (in order of importance) 
+`r paste(skill_counts$job_skills[1:5], collapse = ", ")`!  
+However, we can see that `r skill_counts$job_skills[1]` is referenced in data science job postings `r round(skill_counts$percent_jobs[1], 1)`% of the time.  
+We also can see that `r skill_counts$job_skills[2]` is referenced `r round(skill_counts$percent_jobs[2], 1)`% of the time.  
+This leads the pack by a large margin, since the 3rd most referenced skill is only referenced `r round(skill_counts$percent_jobs[3], 1)`% of the time.
 
-(I also didn't look at any text wrangling to standardize job titles or anything.)
-```{r job-titles}
-job_postings_with_skills %>%
-  group_by(job_title) %>%
-  summarise(
-    num_jobs_with_title = n_distinct(job_link),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    pct_of_all_jobs_in_dataset = round((num_jobs_with_title / n_distinct(job_postings_with_skills$job_link)) * 100, 2)
-  ) %>%
-  arrange(desc(num_jobs_with_title))
-```
- 
+We can now say that these are the most valued data science skills!
+
+## Extra {.tabset}
+
+### Notes
+Here is some extra information on the database built for this project!
+
+### ER Diagram Code
 ```{r er-diagram}
-
-grViz("
-digraph ER {
-  graph [layout = dot, rankdir = LR]
-
-  node [shape = box, style = filled, fillcolor = lightblue]
-
-  job_postings_raw [label = 'job_postings_raw\nPK: job_link']
-  job_summary_raw [label = 'job_summary_raw\nPK/FK: job_link']
-  skills_long [label = 'skills_long\nPK/FK: job_link\njob_skills']
-
-  job_postings_raw -> job_summary_raw [label = '1 to 1']
-  job_postings_raw -> skills_long [label = '1 to many']
-}
-")
-```
-
-```{r er-diagram-2}
-
-grViz("
+er_diagram <- grViz("
 digraph ERD {
   graph [layout = dot, rankdir = LR]
   node [shape = plaintext, fontname = Helvetica, fontsize = 10]
@@ -159,7 +214,9 @@ digraph ERD {
   job_postings_raw -> skills_long [label = '1 : many']
 }
 ")
-
 ```
-## Conclusion
-...
+
+### ER Diagram 
+```{r display-er, echo=FALSE}
+er_diagram
+```
