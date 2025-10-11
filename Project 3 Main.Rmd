@@ -1,0 +1,165 @@
+---
+title: "DATA 607 Project 3"
+author: "Arutam Antunish, Catherine Dube, Wendy Romero"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+if(!require(pacman)) install.packages("pacman")
+pacman::p_load(tidyverse,
+               knitr, 
+               kableExtra, 
+               rvest, 
+               xml2, 
+               jsonlite, 
+               rstudioapi, # Using to get the current file location
+               DiagrammeR # ER diagram
+               )
+```
+
+## Reading the Data from Github Repo 
+```{r read-in-data} 
+projPath <- dirname(file.path(getSourceEditorContext()$path))   # getting where .Rmd is located
+
+job_postings_raw <- read.csv("https://raw.githubusercontent.com/cdube89128/DATA_607_Project_3/refs/heads/main/data/job_postings.csv")   
+job_skills_raw <- read.csv("https://raw.githubusercontent.com/cdube89128/DATA_607_Project_3/refs/heads/main/data/job_skills.csv")
+job_summary_raw <- read.csv("https://media.githubusercontent.com/media/cdube89128/DATA_607_Project_3/refs/heads/main/data/job_summary.csv")
+```
+
+## Cleaning the data to prepare for SQLlite 
+```{r cleaning}
+# Getting just jobs, job names, skills
+job_postings_with_skills <- merge(
+    x = job_postings_raw, y = job_skills_raw,
+    by = "job_link"
+  ) %>% 
+  select(c("job_link", "job_title", "job_skills"))
+
+# Cleaning up the skills
+skills_long <- job_postings_with_skills %>%
+  select(job_link, job_skills) %>%
+  mutate(job_skills = str_split(job_skills, ",")) %>%     # Split skills by comma
+  unnest(job_skills) %>%
+  mutate(job_skills = str_trim(job_skills))
+
+# skills_long will be used for our database
+
+# How many jobs mention each skill
+skill_counts <- skills_long %>%
+  group_by(job_skills) %>%
+  summarise(
+    jobs_with_skill = n_distinct(job_link)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    percent_jobs = (jobs_with_skill / n_distinct(job_postings_with_skills$job_link)) * 100
+  ) %>%
+  arrange(desc(jobs_with_skill)) %>%
+  slice_head(n = 25)  # Capped it at top 25 skills to the graph will be readable
+```
+ 
+```{r viz}
+ggplot(skill_counts, aes(x = reorder(job_skills, percent_jobs), y = percent_jobs)) +
+  geom_col(fill = "cornflowerblue") +
+  coord_flip() +  # Horizontal bars for better readbaility
+  labs(
+    title = "Top 25 Skills Mentioned in Job Listings",
+    x = "Skill",
+    y = "Percentage of Job Listings (%)"
+  ) +
+  theme_minimal()
+```
+
+Now honestly if doing this properly, should probably have parsed out which job titles we want to include or not, but I just really didn't look at that yet since the data set was supposed to be data science jobs.
+
+(I also didn't look at any text wrangling to standardize job titles or anything.)
+```{r job-titles}
+job_postings_with_skills %>%
+  group_by(job_title) %>%
+  summarise(
+    num_jobs_with_title = n_distinct(job_link),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    pct_of_all_jobs_in_dataset = round((num_jobs_with_title / n_distinct(job_postings_with_skills$job_link)) * 100, 2)
+  ) %>%
+  arrange(desc(num_jobs_with_title))
+```
+ 
+```{r er-diagram}
+
+grViz("
+digraph ER {
+  graph [layout = dot, rankdir = LR]
+
+  node [shape = box, style = filled, fillcolor = lightblue]
+
+  job_postings_raw [label = 'job_postings_raw\nPK: job_link']
+  job_summary_raw [label = 'job_summary_raw\nPK/FK: job_link']
+  skills_long [label = 'skills_long\nPK/FK: job_link\njob_skills']
+
+  job_postings_raw -> job_summary_raw [label = '1 to 1']
+  job_postings_raw -> skills_long [label = '1 to many']
+}
+")
+```
+
+```{r er-diagram-2}
+
+grViz("
+digraph ERD {
+  graph [layout = dot, rankdir = LR]
+  node [shape = plaintext, fontname = Helvetica, fontsize = 10]
+
+  job_postings_raw [
+    label=<
+      <TABLE BORDER='1' CELLBORDER='0' CELLSPACING='0' BGCOLOR='lightyellow'>
+        <TR><TD WIDTH='130' ALIGN='CENTER' BGCOLOR='gold'><B>Job_Postings</B></TD></TR>
+        <TR><TD ALIGN='LEFT' BALIGN='LEFT'>job_link (PK)</TD></TR>
+        <TR><TD ALIGN='LEFT'>last_processed_time</TD></TR>
+        <TR><TD ALIGN='LEFT'>last_status</TD></TR>
+        <TR><TD ALIGN='LEFT'>got_summary</TD></TR>
+        <TR><TD ALIGN='LEFT'>got_ner</TD></TR>
+        <TR><TD ALIGN='LEFT'>is_being_worked</TD></TR>
+        <TR><TD ALIGN='LEFT'>job_title</TD></TR>
+        <TR><TD ALIGN='LEFT'>company</TD></TR>
+        <TR><TD ALIGN='LEFT'>job_location</TD></TR>
+        <TR><TD ALIGN='LEFT'>first_seen</TD></TR>
+        <TR><TD ALIGN='LEFT'>search_city</TD></TR>
+        <TR><TD ALIGN='LEFT'>search_country</TD></TR>
+        <TR><TD ALIGN='LEFT'>search_position</TD></TR>
+        <TR><TD ALIGN='LEFT'>job_level</TD></TR>
+        <TR><TD ALIGN='LEFT'>job_type</TD></TR>
+      </TABLE>
+    >
+  ]
+
+  job_summary_raw [
+    label=<
+      <TABLE BORDER='1' CELLBORDER='0' CELLSPACING='0' BGCOLOR='lightyellow'>
+        <TR><TD WIDTH='120' ALIGN='CENTER' BGCOLOR='gold'><B>Job_Summary</B></TD></TR>
+        <TR><TD ALIGN='LEFT'>job_link (PK, FK)</TD></TR>
+        <TR><TD ALIGN='LEFT'>job_summary</TD></TR>
+      </TABLE>
+    >
+  ]
+
+  skills_long [
+    label=<
+      <TABLE BORDER='1' CELLBORDER='0' CELLSPACING='0' BGCOLOR='lightyellow'>
+        <TR><TD WIDTH='100' ALIGN='CENTER' BGCOLOR='gold'><B>Job_Skills_Long</B></TD></TR>
+        <TR><TD ALIGN='LEFT'>job_link (PK, FK)</TD></TR>
+        <TR><TD ALIGN='LEFT'>job_skills</TD></TR>
+      </TABLE>
+    >
+  ]
+
+  # Relationships
+  job_postings_raw -> job_summary_raw [label = '1 : 1']
+  job_postings_raw -> skills_long [label = '1 : many']
+}
+")
+
+```
+## Conclusion
+...
