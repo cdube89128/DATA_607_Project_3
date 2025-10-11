@@ -220,3 +220,8 @@ digraph ERD {
 ```{r display-er, echo=FALSE}
 er_diagram
 ```
+
+### Deleting SQLLite Local Instance 
+```{r remove-sql, echo=TRUE}
+file.remove("jobs_database.sqlite")
+```
