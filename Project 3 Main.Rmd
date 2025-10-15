@@ -145,6 +145,112 @@ ggplot(skill_counts, aes(x = reorder(job_skills, percent_jobs), y = percent_jobs
   theme_minimal()
 ```
 
+
+## Top 25 Job Postings with the Heaviest Skill Requirements
+
+```{r skill heavy}
+
+#creating a dataframe of the job posting with the most skills
+UniqueSkills_ByPosting <- job_postings_with_skills %>%
+  reframe(
+    num_skill = n_distinct(job_skills),
+    title = job_title,
+    job_company = company,
+    seniority = job_level,
+    .by = c(job_link)
+  ) %>%
+distinct(job_link, .keep_all = TRUE) 
+#Arrange in descending order
+UniqueSkills_ByPosting <- UniqueSkills_ByPosting %>%
+  arrange(desc(num_skill))
+
+# Top 25
+top_skill_postings <- UniqueSkills_ByPosting %>%
+  slice_max(num_skill, n = 25, with_ties = FALSE)
+
+```
+
+
+```{r cleaning titles}
+
+#Cleaning up job titles
+top_skill_postings <- top_skill_postings %>%
+  mutate(
+    short_title = str_replace(title, "\\s*[-–—/(),]\\s*.*$", "") %>% str_trim()
+  )
+
+```
+
+
+## Plotting the 25 Job Listings with the Heaviest Skill Requirements
+
+
+```{r  fig.width = 10, fig.height = 6 }
+#Plot
+
+
+ggplot(top_skill_postings, aes(x = reorder(short_title, num_skill), y = num_skill, fill = job_company)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 25 Job Postings with the Heaviest Skill Requirements",
+    subtitle = "By Job Title and Company",
+    x = "Job Title",
+    y = "Number of Skills Required for the Job",
+    fill = "Company" 
+  ) +
+  theme_minimal()+
+  guides(fill = guide_legend(ncol = 1, keywidth = 1, keyheight = 0.8))
+
+```
+
+## The 25 Job Listings with the Lowest Number of Skill Requirements
+
+```{r bottom skill heaviness }
+
+#Arrange in ascending order
+bottom_skill_postings <- UniqueSkills_ByPosting %>%
+  arrange(num_skill) %>%
+  slice(1:25)
+
+
+#Cleaning up job titles
+bottom_skill_postings <- bottom_skill_postings %>%
+  mutate(
+    bshort_title = title %>%
+      # trying to remove 100% ONSITE and 100% ONSITE JOB
+      str_replace(regex("^\\s*100% ONSITE( JOB)?\\s*:?", ignore_case = TRUE), "") %>%
+      str_replace_all("\\s*[-–—/(),].*$", "") %>%
+      str_trim()
+    )
+
+```
+
+```{r fig.width = 10, fig.height = 6}
+
+library(RColorBrewer)
+
+bottom_colors <- 25
+colors <- colorRampPalette(brewer.pal(12, "Set3"))(bottom_colors)
+
+
+ggplot(bottom_skill_postings, aes(x = reorder(bshort_title, num_skill), y = num_skill, fill = job_company)) +
+  geom_col() +
+  scale_fill_manual(values = colors ) +
+  coord_flip() +
+  labs(
+    title = "The 25 Job Postings with the Lowest Skill Requirements",
+    subtitle = "By Job Title and Company",
+    x = "Job Title",
+    y = "Number of Skills Required for the Job",
+    fill = "Company" 
+  ) +
+  theme_minimal() +
+  guides(fill = guide_legend(ncol = 1, keywidth = 1, keyheight = 0.8))
+
+
+```
+
 ## Conclusion
 The top 5 most valuable data science skills are (in order of importance) 
 `r paste(skill_counts$job_skills[1:5], collapse = ", ")`!  
