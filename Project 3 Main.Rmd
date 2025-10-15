@@ -146,9 +146,11 @@ ggplot(skill_counts, aes(x = reorder(job_skills, percent_jobs), y = percent_jobs
 ```
 
 
-## Top 25 Job Postings with the Heaviest Skill Requirements
+## Distribution of Unique Skills Required by Jobs
 
-```{r skill heavy}
+Let's take a look at the number of unique skills required by the jobs in our dataset. 
+
+```{r unique skills}
 
 #creating a dataframe of the job posting with the most skills
 UniqueSkills_ByPosting <- job_postings_with_skills %>%
@@ -160,12 +162,63 @@ UniqueSkills_ByPosting <- job_postings_with_skills %>%
     .by = c(job_link)
   ) %>%
 distinct(job_link, .keep_all = TRUE) 
-#Arrange in descending order
-UniqueSkills_ByPosting <- UniqueSkills_ByPosting %>%
-  arrange(desc(num_skill))
 
-# Top 25
-top_skill_postings <- UniqueSkills_ByPosting %>%
+```
+
+What if we want to know the mean number of skills required by jobs?
+
+```{r mean }
+#calculationg mean
+nskill_mean <- round(mean(UniqueSkills_ByPosting$num_skill), digits =0)
+nskill_mean
+```
+
+What if we want to know the median number of skills required by jobs?
+
+```{r median}
+
+#calculationg median
+nskill_median <- round(median(UniqueSkills_ByPosting$num_skill), digits =2)
+
+nskill_median
+```
+
+**Okay great now we know that the mean and median of the distribution of unique skills required by jobs are different but not there is not a great difference between them. The mean being 26 (rounded) and the median being 24.**
+
+
+Now let's plot the distribution of the unique skills required by data science jobs in our dataset 
+```{r plot of dist and mean}
+
+
+ggplot(UniqueSkills_ByPosting, aes(x = num_skill)) +
+  geom_histogram(binwidth = 1, fill = "steelblue") +
+  labs(
+    title = "Distribution of Skills Required by Jobs",
+    x = "Number of Unique Skills",
+    y = "Number of Jobs"
+  )+
+  geom_vline(aes(xintercept = nskill_mean), color = "black", 
+             linetype ="dashed", size =1) +
+ annotate("text",                        
+           x = nskill_mean + 5,
+           y = 340,
+           label = paste("Mean =", nskill_mean),
+           col = "black",
+           size = 5,
+          hjust = 0.05)
+
+
+```
+
+**We can see from that the distribution is right-skewed because of a few outliers and especially one very large outlier that gives our distribution a long right tail. But we know that the average number of unique skills required by the data science jobs in our data set is actually 26, though the spread ranges from near zero to 200.  **
+
+## Top 25 Job Postings with the Heaviest Skill Requirements
+
+```{r 25 skill heavy }
+#Arrange in descending order
+
+top_skill_postings<- UniqueSkills_ByPosting %>%
+  arrange(desc(num_skill))  %>%
   slice_max(num_skill, n = 25, with_ties = FALSE)
 
 ```
