@@ -99,7 +99,8 @@ filtered_jobs <- job_postings %>%
     str_detect(job_title, regex("data.*science", ignore_case = TRUE)) |
     str_detect(job_title, regex("analyst", ignore_case = TRUE)) |
     str_detect(job_title, regex("database", ignore_case = TRUE)) |
-    str_detect(job_title, regex("data.*engineer", ignore_case = TRUE))
+    str_detect(job_title, regex("data.*engineer", ignore_case = TRUE)) |
+    str_detect(job_title, regex("machine.*learning", ignore_case = TRUE))
   )
 
 # What percent of the original dataset is left?
@@ -198,7 +199,7 @@ ggplot(UniqueSkills_ByPosting, aes(x = num_skill)) +
     y = "Number of Jobs"
   )+
   geom_vline(aes(xintercept = nskill_mean), color = "black", 
-             linetype ="dashed", size =1) +
+             linetype ="dashed", linewidth =1) +
  annotate("text",                        
            x = nskill_mean + 5,
            y = 340,
@@ -312,6 +313,9 @@ We also can see that `r skill_counts$job_skills[2]` is referenced `r round(skill
 This leads the pack by a large margin, since the 3rd most referenced skill is only referenced `r round(skill_counts$percent_jobs[3], 1)`% of the time.
 
 We can now say that these are the most valued data science skills!
+
+From our dataset we have garnered that on average data science job look for a set of 26 unique skills, though there exists many that require far fewer, and an exceptional few that require over 150+.
+
 
 ## Extra {.tabset}
 
