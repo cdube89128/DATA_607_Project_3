@@ -99,7 +99,8 @@ filtered_jobs <- job_postings %>%
     str_detect(job_title, regex("data.*science", ignore_case = TRUE)) |
     str_detect(job_title, regex("analyst", ignore_case = TRUE)) |
     str_detect(job_title, regex("database", ignore_case = TRUE)) |
-    str_detect(job_title, regex("data.*engineer", ignore_case = TRUE))
+    str_detect(job_title, regex("data.*engineer", ignore_case = TRUE)) |
+    str_detect(job_title, regex("machine.*learning", ignore_case = TRUE))
   )
 
 # What percent of the original dataset is left?
@@ -145,6 +146,165 @@ ggplot(skill_counts, aes(x = reorder(job_skills, percent_jobs), y = percent_jobs
   theme_minimal()
 ```
 
+
+## Distribution of Unique Skills Required by Jobs
+
+Let's take a look at the number of unique skills required by the jobs in our dataset. 
+
+```{r unique skills}
+
+#creating a dataframe of the job posting with the most skills
+UniqueSkills_ByPosting <- job_postings_with_skills %>%
+  reframe(
+    num_skill = n_distinct(job_skills),
+    title = job_title,
+    job_company = company,
+    seniority = job_level,
+    .by = c(job_link)
+  ) %>%
+distinct(job_link, .keep_all = TRUE) 
+
+```
+
+What if we want to know the mean number of skills required by jobs?
+
+```{r mean }
+#calculationg mean
+nskill_mean <- round(mean(UniqueSkills_ByPosting$num_skill), digits =0)
+nskill_mean
+```
+
+What if we want to know the median number of skills required by jobs?
+
+```{r median}
+
+#calculationg median
+nskill_median <- round(median(UniqueSkills_ByPosting$num_skill), digits =2)
+
+nskill_median
+```
+
+**Okay great now we know that the mean and median of the distribution of unique skills required by jobs are different but not there is not a great difference between them. The mean being 26 (rounded) and the median being 24.**
+
+
+Now let's plot the distribution of the unique skills required by data science jobs in our dataset 
+```{r plot of dist and mean}
+
+
+ggplot(UniqueSkills_ByPosting, aes(x = num_skill)) +
+  geom_histogram(binwidth = 1, fill = "steelblue") +
+  labs(
+    title = "Distribution of Skills Required by Jobs",
+    x = "Number of Unique Skills",
+    y = "Number of Jobs"
+  )+
+  geom_vline(aes(xintercept = nskill_mean), color = "black", 
+             linetype ="dashed", linewidth =1) +
+ annotate("text",                        
+           x = nskill_mean + 5,
+           y = 340,
+           label = paste("Mean =", nskill_mean),
+           col = "black",
+           size = 5,
+          hjust = 0.05)
+
+
+```
+
+**We can see from that the distribution is right-skewed because of a few outliers and especially one very large outlier that gives our distribution a long right tail. But we know that the average number of unique skills required by the data science jobs in our data set is actually 26, though the spread ranges from near zero to 200.  **
+
+## Top 25 Job Postings with the Heaviest Skill Requirements
+
+```{r 25 skill heavy }
+#Arrange in descending order
+
+top_skill_postings<- UniqueSkills_ByPosting %>%
+  arrange(desc(num_skill))  %>%
+  slice_max(num_skill, n = 25, with_ties = FALSE)
+
+```
+
+
+```{r cleaning titles}
+
+#Cleaning up job titles
+top_skill_postings <- top_skill_postings %>%
+  mutate(
+    short_title = str_replace(title, "\\s*[-–—/(),]\\s*.*$", "") %>% str_trim()
+  )
+
+```
+
+
+## Plotting the 25 Job Listings with the Heaviest Skill Requirements
+
+
+```{r  fig.width = 10, fig.height = 6 }
+#Plot
+
+
+ggplot(top_skill_postings, aes(x = reorder(short_title, num_skill), y = num_skill, fill = job_company)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 25 Job Postings with the Heaviest Skill Requirements",
+    subtitle = "By Job Title and Company",
+    x = "Job Title",
+    y = "Number of Skills Required for the Job",
+    fill = "Company" 
+  ) +
+  theme_minimal()+
+  guides(fill = guide_legend(ncol = 1, keywidth = 1, keyheight = 0.8))
+
+```
+
+## The 25 Job Listings with the Lowest Number of Skill Requirements
+
+```{r bottom skill heaviness }
+
+#Arrange in ascending order
+bottom_skill_postings <- UniqueSkills_ByPosting %>%
+  arrange(num_skill) %>%
+  slice(1:25)
+
+
+#Cleaning up job titles
+bottom_skill_postings <- bottom_skill_postings %>%
+  mutate(
+    bshort_title = title %>%
+      # trying to remove 100% ONSITE and 100% ONSITE JOB
+      str_replace(regex("^\\s*100% ONSITE( JOB)?\\s*:?", ignore_case = TRUE), "") %>%
+      str_replace_all("\\s*[-–—/(),].*$", "") %>%
+      str_trim()
+    )
+
+```
+
+```{r fig.width = 10, fig.height = 6}
+
+library(RColorBrewer)
+
+bottom_colors <- 25
+colors <- colorRampPalette(brewer.pal(12, "Set3"))(bottom_colors)
+
+
+ggplot(bottom_skill_postings, aes(x = reorder(bshort_title, num_skill), y = num_skill, fill = job_company)) +
+  geom_col() +
+  scale_fill_manual(values = colors ) +
+  coord_flip() +
+  labs(
+    title = "The 25 Job Postings with the Lowest Skill Requirements",
+    subtitle = "By Job Title and Company",
+    x = "Job Title",
+    y = "Number of Skills Required for the Job",
+    fill = "Company" 
+  ) +
+  theme_minimal() +
+  guides(fill = guide_legend(ncol = 1, keywidth = 1, keyheight = 0.8))
+
+
+```
+
 ## Conclusion
 The top 5 most valuable data science skills are (in order of importance) 
 `r paste(skill_counts$job_skills[1:5], collapse = ", ")`!  
@@ -153,6 +313,9 @@ We also can see that `r skill_counts$job_skills[2]` is referenced `r round(skill
 This leads the pack by a large margin, since the 3rd most referenced skill is only referenced `r round(skill_counts$percent_jobs[3], 1)`% of the time.
 
 We can now say that these are the most valued data science skills!
+
+From our dataset we have garnered that on average data science job look for a set of 26 unique skills, though there exists many that require far fewer, and an exceptional few that require over 150+.
+
 
 ## Extra {.tabset}
 
