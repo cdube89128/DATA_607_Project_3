@@ -32,9 +32,15 @@ pacman::p_load(tidyverse,
 ## Objective
 Answer the Question: **Which are the most valued data science skills?**
 
+## Motivation
+The primary goal of this project is to explore and identify the most valued skills in the field of Data Science, using real job market data.
+
+We selected the “[Data Science Job Postings & Skills (2024)](https://www.kaggle.com/datasets/asaniczka/data-science-job-postings-and-skills/data)” dataset from Kaggle because it provides a rich collection of LinkedIn job postings, including detailed job titles, locations, and required skills. This dataset allows us to examine patterns in the job market and derive insights about which technical and analytical competencies employers value most.
+
+This project also serves as a practical exercise in applying key principles of data acquisition, cleaning, management, and normalization. In addition, it demonstrates the team’s ability to collaborate effectively in a remote setting, leveraging shared tools and workflows (GitHub, Google Docs, Slack, and RStudio).
+
 ## Approach
 Using the Kaggle dataset [Data Science Job Postings & Skills (2024)](https://www.kaggle.com/datasets/asaniczka/data-science-job-postings-and-skills/data). With it, we can trim down the job listing to only those that are the most representative of data science role. Then we can investigate what skills were the most commonly required for these jobs.
-
 
 ## Reading the Data from Github Repo 
 ```{r read-in-data} 
