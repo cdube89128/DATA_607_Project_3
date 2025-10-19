@@ -97,7 +97,7 @@ Disconnest from SQLLite Database at end
 dbDisconnect(con)
 ```
 
-## Let's trim 
+## Let's trim (and a bit of exploratory analysis)
 Trimming this down to a shorter list of job titles that we think are more relevant to the question.
 ```{r trimming}
 filtered_jobs <- job_postings %>%
@@ -138,6 +138,25 @@ skill_counts <- job_postings_with_skills %>%
 #head(skill_counts, 25)
 ```
  
+Here are some exploratory summary stats about the skills these jobs are looking for. 
+```{r exploratory-analysis-1}
+# Brief Exploratory Analysis
+summary(skill_counts)
+```
+Above, we see that the median number of jobs that a skill is referenced by is `r median(skill_counts$jobs_with_skill)`. The mean is `r round(mean(skill_counts$jobs_with_skill))`. If we were to pluck a skill from the list, we might expect it to be referenced in `r round(median(skill_counts$percent_jobs))`% of the jobs from this set.
+
+Here is a peak into the most common job titles in our trimmed data set.
+```{r exploratory-analysis-2}
+# Brief Exploratory Analysis Cont.
+filtered_jobs %>%
+  group_by(job_title) %>%
+  summarise(
+    number_of_entries = n()
+  ) %>%
+  arrange(desc(number_of_entries)) %>%
+  slice_head(n = 50)
+```
+
 ## Top 25 Skills for Data Science!
 ```{r viz}
 ggplot(skill_counts, aes(x = reorder(job_skills, percent_jobs), y = percent_jobs)) +
